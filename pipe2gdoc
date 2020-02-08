@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+
+import yaml
+import argparse
+import pickle
+import time
+import os.path
+import sys
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from pathlib import Path
+
+class GDocPipe:
+  def __init__(self, documentId, pickleToken, authenticate, credentials):
+    # If modifying these scopes, delete the file token.pickle.
+    self.SCOPES = ['https://www.googleapis.com/auth/documents']
+    self.documentId = documentId 
+    self.connect(pickleToken, authenticate, credentials)
+
+  def connect(self, pickleToken, authenticate, credentials):
+    creds = None
+    if authenticate:
+      if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+          print("Credentials not provided, or have expired.")
+        else:
+          flow = InstalledAppFlow.from_client_secrets_file(
+              credentials, self.SCOPES)
+          creds = flow.run_local_server()
+          with open(pickleToken, 'wb') as token:
+              pickle.dump(creds, token)
+      sys.exit(0)
+    else:
+      if os.path.exists(pickleToken):
+        with open(pickleToken, 'rb') as token:
+          creds = pickle.load(token)
+    self.service = build('docs', 'v1', credentials=creds)
+
+  def addText(self, txt):
+    document = self.service.documents().get(documentId=self.documentId).execute()
+    startIndex = document['body']['content'][1]['startIndex']
+    endIndex = document['body']['content'][len(document['body']['content'])-1]['endIndex']
+    requests = []
+    requests.append( { 'insertText': { 'location': { 'index': endIndex-1, }, 'text': txt } }, )
+    requests.append( { 'updateTextStyle': { 'range': { 'startIndex': startIndex, 'endIndex': endIndex + len(txt) }, 'textStyle': { 'weightedFontFamily': { 'fontFamily': 'Courier New' } }, 'fields': 'weightedFontFamily' } }, )
+    result = self.service.documents().batchUpdate(
+        documentId=self.documentId, body={'requests': requests}
+    ).execute()
+
+def get_args():
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-q", required=False, default=False, action="store_true",
+      help="Suppress all standard output." )
+  parser.add_argument("--documentId", required=False, type=str, default="null",
+      help="The Google Document ID."
+           "  Example:  --documentId 1W8vd1Ad0LJt5FIWQOzaIUhOby4dwhL9TPkihFhb0dOU" )
+  parser.add_argument("--maxBuffer", required=False, type=int, default=1000,
+      help="The maximum number of lines to buffer locally before commiting the current buffer to the GDoc.  The default is 1000."
+           "  Example:  --maxBuffer 500" )
+  parser.add_argument("--maxTime", required=False, type=int, default=30,
+      help="The maximum time in seconds to wait for new input (while below the buffer max) before commiting the current buffer to the GDoc.  The default is 30."
+           "  Example:  --maxTime 10" )
+  parser.add_argument("--config", required=False, type=str, default="{}/.pipe2gdocrc".format(Path.home()),
+      help="The location of your YAML configuration file.  Defaults to ~/.pipe2gdocrc"
+           "  Example:  --config /opt/oddworld/mypipe2gdocrc" )
+  parser.add_argument("--pickleToken", required=False, default='token.pickle', type=str,
+      help="The path to your token.pickle file.  It defaults to ./token.pickle"
+           "  Example:  --pickleToken /opt/oddworld/token.pickle" )
+  parser.add_argument("--authenticate", required=False, default=False, action="store_true",
+      help="Authenticate with OAuth, using the credentials provided in either ./credentials.json, or the file you provide with --credentials."
+           "  Example:  --authenticate --credentials /opt/oddworld/credentials.json --tokenPickle /opt/oddworld/token.pickle" )
+  parser.add_argument("--credentials", required=False, default='credentials.json', type=str,
+      help="If --pickleToken is specified, then the token will be written to the path provided.  Otherwise, it will bre written to ./token.pickle"
+           "If your pickle token is already created, you do not need this option."
+           "  Example:  --authenticate --credentials /opt/oddworld/credentials.json --tokenPickle /opt/oddworld/token.pickle" )
+  args = parser.parse_args()
+  return args
+
+def load_config(args):
+  if os.path.exists(args.config):
+    try:
+      with open(args.config) as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)     
+    except IOError as e:
+      print("File {} not accessible: {}".format(args.config, e))
+      sys.exit(1)
+    if 'documentId' in config.keys() and args.documentId == 'null':
+      args.documentId = config['documentId']
+    if 'maxBuffer' in config.keys():
+      args.maxBuffer = config['maxBuffer']
+    if 'maxTime' in config.keys():
+      args.maxTime = config['maxTime']
+    if 'pickleToken' in config.keys():
+      args.pickleToken = config['pickleToken']
+    if 'credentials' in config.keys():
+      args.credentials = config['credentials']
+  return args
+
+if __name__ == '__main__':
+  args = get_args()
+  args = load_config(args)
+  if not args.authenticate and args.documentId == 'null':
+    print("--documentId is required.")
+    sys.exit(1)
+  doc = GDocPipe(args.documentId, args.pickleToken, args.authenticate, args.credentials)
+  buf = []
+  st = int(time.time())
+  while True:
+    try:
+      line = input()
+      buf.append(line)
+      if len(buf) > args.maxBuffer or int(time.time()) - st > args.maxTime:
+        if not args.q:
+          print("Flushing buffer.")
+        doc.addText("".join(buf))
+        st = int(time.time())
+        buf = []
+    except EOFError:
+      if not args.q:
+        print("Flushing buffer.")
+      buf.append("\n")
+      doc.addText("".join(buf))
+      break
