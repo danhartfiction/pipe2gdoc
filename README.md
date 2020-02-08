@@ -25,6 +25,7 @@ Note:  If you are doing this headless (on a remote Linux server,) do the followi
 documentId: whateveryourdeafultdocumentidis
 ```
 NOTE:  If you use the word new as your documentId a new document will be created each time you run the script, named pipe2gdoc_datestamp
+
 7. Pipe something to it
 ```
 echo "hello world" | pipe2gdoc
@@ -34,6 +35,7 @@ echo "hello world" | pipe2gdoc
 echo "hello world" | pipe2gdoc --documentId whateveryourdeafultdocumentidis
 ```
 NOTE:  If you use the word new as your documentId a new document will be created each time you run the script, named pipe2gdoc_datestamp
+
 ### Windows
 I dunno.  It probably works?  :3
 
