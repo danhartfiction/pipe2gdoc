@@ -109,7 +109,7 @@ if __name__ == '__main__':
   while True:
     try:
       line = input()
-      buf.append(line)
+      buf.append("{}\n".format(line))
       if len(buf) > args.maxBuffer or int(time.time()) - st > args.maxTime:
         if not args.q:
           print("Flushing buffer.")

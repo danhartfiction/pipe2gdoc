@@ -1,26 +1,49 @@
 # pipe2gdoc
-> Send the output of console commands to a Google Doc
+Send the output of console commands to a Google Doc
 
 ## Quickstart
-1. cp pipe2gdoc somewhere in your $PATH
-2. Enable the Google Docs API.  The easiest way to do this is to visit https://developers.google.com/docs/api/quickstart/python and click the "Enable the Google Docs API" button.
-3. Download the client configuration.  This should be a file named credentials.json
-4. Authenticate:
+### MacOS / Linux
+1. Install any pip packages you might need
+```pip3 install -r requirements.txt```
+2. cp pipe2gdoc somewhere in your $PATH
+3. Enable the Google Docs API.  The easiest way to do this is to visit https://developers.google.com/docs/api/quickstart/python and click the "Enable the Google Docs API" button.
+4. Download the client configuration.  This should be a file named credentials.json
+5. Authenticate:
 ```pipe2gdoc --authenticate --credentials /path/to/credentials.json```
-5. (Optionally) Create ~/.pipe2gdocrc with one line in it:
-```documentId: whateveryourdeafultdocumentidis
+Note:  If you are doing this headless (on a remote Linux server,) do the following steps:
 ```
-6. Pipe something to it
-```echo "hello world" | pipe2gdoc
+  A. Copy the URL it prints out, and paste it into your own web browser.
+  B. Auth normally.
+  C. When it redirects you to localhost and it fails, copy that URL
+  D. SSH into another session on your remote Linux server, and run
+      curl 'url you copied'
+  E. Authentication should then complete normally.
 ```
-6b. Without using a config file
-```echo "hello world" | pipe2gdoc --documentId whateveryourdeafultdocumentidis
+
+6. (Optionally) Create ~/.pipe2gdocrc with one line in it:
 ```
+documentId: whateveryourdeafultdocumentidis
+```
+7. Pipe something to it
+```
+echo "hello world" | pipe2gdoc
+```
+7b. Without using a config file
+```
+echo "hello world" | pipe2gdoc --documentId whateveryourdeafultdocumentidis
+```
+### Windows
+I dunno.  It probably works?  :3
+
+## Requirements
+1. You must be able to enable the Google Docs API for your account.  This is almost always possible, unless you have an Enterprise account with restrictions set.
+2. Python 3
 
 ## Usage
 If you don't have documentId specified in your config file, then you *must* specify --documentId, unless you are authenticating
 
-```$ ./pipe2gdoc --help
+```
+$ pipe2gdoc --help
 usage: pipe2gdoc [-h] [-q] [--documentId DOCUMENTID] [--maxBuffer MAXBUFFER]
                  [--maxTime MAXTIME] [--config CONFIG]
                  [--pickleToken PICKLETOKEN] [--authenticate]
@@ -68,7 +91,8 @@ The config file is YAML formatted, and can contain any of the command line argum
 The primary purpose of the config file is to prevent the need to specify --documentId every time.  But it can be used to configure any argument.
 
 A fully redundant (using default values other than documentId) example can be found below:
-```documentId: 1W8vd1Ad0LJt5FIWQOzaIUhOby4dwhL9TPkihFhb0dOU
+```
+documentId: 1W8vd1Ad0LJt5FIWQOzaIUhOby4dwhL9TPkihFhb0dOU
 maxBuffer: 1000
 maxTime: 30
 pickleToken: /opt/oddworld/token.pickle
