@@ -6,6 +6,7 @@ import pickle
 import time
 import os.path
 import sys
+import datetime
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -37,8 +38,19 @@ class GDocPipe:
           creds = pickle.load(token)
     self.service = build('docs', 'v1', credentials=creds)
 
+  def createdoc(self):
+    now = str(datetime.datetime.now())
+    title = "pipe2gdoc_{}".format(now)
+    body = { 'title': title }
+    doc = self.service.documents().create(body=body).execute()
+    return doc
+
   def addText(self, txt):
-    document = self.service.documents().get(documentId=self.documentId).execute()
+    if self.documentId == 'new':
+      document = self.createdoc()
+      self.documentId = document.get('documentId')
+    else:
+      document = self.service.documents().get(documentId=self.documentId).execute()
     startIndex = document['body']['content'][1]['startIndex']
     endIndex = document['body']['content'][len(document['body']['content'])-1]['endIndex']
     requests = []
@@ -49,31 +61,33 @@ class GDocPipe:
     ).execute()
 
 def get_args():
-  parser = argparse.ArgumentParser()
+  parser = argparse.ArgumentParser(description="Send the output of console commands to a Google Doc", formatter_class=argparse.RawTextHelpFormatter)
   parser.add_argument("-q", required=False, default=False, action="store_true",
-      help="Suppress all standard output." )
+      help="Suppress all standard output.\n" )
   parser.add_argument("--documentId", required=False, type=str, default="null",
-      help="The Google Document ID."
-           "  Example:  --documentId 1W8vd1Ad0LJt5FIWQOzaIUhOby4dwhL9TPkihFhb0dOU" )
+      help="The Google Document ID.  Use 'new' if you want to create a new document.\n"
+           "  The new document would be named similar to pipe2gdoc_2020-02-08 02:12:31.278968\n"
+           "  Example:  --documentId 1W8vd1Ad0LJt5FIWQOzaIUhOby4dwhL9TPkihFhb0dOU\n" 
+           "  Example:  --documentId new\n" )
   parser.add_argument("--maxBuffer", required=False, type=int, default=1000,
-      help="The maximum number of lines to buffer locally before commiting the current buffer to the GDoc.  The default is 1000."
-           "  Example:  --maxBuffer 500" )
+      help="The maximum number of lines to buffer locally before commiting the current buffer to the GDoc.  The default is 1000.\n"
+           "  Example:  --maxBuffer 500\n" )
   parser.add_argument("--maxTime", required=False, type=int, default=30,
-      help="The maximum time in seconds to wait for new input (while below the buffer max) before commiting the current buffer to the GDoc.  The default is 30."
-           "  Example:  --maxTime 10" )
+      help="The maximum time in seconds to wait for new input (while below the buffer max) before commiting the current buffer to the GDoc.  The default is 30.\n"
+           "  Example:  --maxTime 10\n" )
   parser.add_argument("--config", required=False, type=str, default="{}/.pipe2gdocrc".format(Path.home()),
-      help="The location of your YAML configuration file.  Defaults to ~/.pipe2gdocrc"
-           "  Example:  --config /opt/oddworld/mypipe2gdocrc" )
+      help="The location of your YAML configuration file.  Defaults to ~/.pipe2gdocrc\n"
+           "  Example:  --config /opt/oddworld/mypipe2gdocrc\n" )
   parser.add_argument("--pickleToken", required=False, default='token.pickle', type=str,
-      help="The path to your token.pickle file.  It defaults to ./token.pickle"
-           "  Example:  --pickleToken /opt/oddworld/token.pickle" )
+      help="The path to your token.pickle file.  It defaults to ./token.pickle\n"
+           "  Example:  --pickleToken /opt/oddworld/token.pickle\n" )
   parser.add_argument("--authenticate", required=False, default=False, action="store_true",
-      help="Authenticate with OAuth, using the credentials provided in either ./credentials.json, or the file you provide with --credentials."
-           "  Example:  --authenticate --credentials /opt/oddworld/credentials.json --tokenPickle /opt/oddworld/token.pickle" )
+      help="Authenticate with OAuth, using the credentials provided in either ./credentials.json, or the file you provide with --credentials.\n"
+           "  Example:  --authenticate --credentials /opt/oddworld/credentials.json --tokenPickle /opt/oddworld/token.pickle\n" )
   parser.add_argument("--credentials", required=False, default='credentials.json', type=str,
-      help="If --pickleToken is specified, then the token will be written to the path provided.  Otherwise, it will bre written to ./token.pickle"
-           "If your pickle token is already created, you do not need this option."
-           "  Example:  --authenticate --credentials /opt/oddworld/credentials.json --tokenPickle /opt/oddworld/token.pickle" )
+      help="If --pickleToken is specified, then the token will be written to the path provided.  Otherwise, it will bre written to ./token.pickle\n"
+           "If your pickle token is already created, you do not need this option.\n"
+           "  Example:  --authenticate --credentials /opt/oddworld/credentials.json --tokenPickle /opt/oddworld/token.pickle\n" )
   args = parser.parse_args()
   return args
 
