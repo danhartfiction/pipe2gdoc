@@ -7,13 +7,20 @@ import time
 import os.path
 import sys
 import datetime
+import unicodedata
+import signal
+import re
+from pathlib import Path
+from select import select
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-from pathlib import Path
 
 class GDocPipe:
   def __init__(self, documentId, pickleToken, authenticate, credentials):
+    self.newline_escape = re.compile(r'\n')
+    self.newline_unscape = re.compile(r':NEWLINE:')
+    self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     # If modifying these scopes, delete the file token.pickle.
     self.SCOPES = ['https://www.googleapis.com/auth/documents']
     self.documentId = documentId 
@@ -38,6 +45,13 @@ class GDocPipe:
           creds = pickle.load(token)
     self.service = build('docs', 'v1', credentials=creds)
 
+  def cleanupString(self, txt):
+    newstr = self.ansi_escape.sub('', txt)
+    newstr2= self.newline_escape.sub(':NEWLINE:', newstr)
+    newstr3 = "".join(ch for ch in newstr2 if unicodedata.category(ch)[0]!="C")
+    fstr = self.newline_unscape.sub("\n", newstr3)
+    return fstr
+
   def createdoc(self):
     now = str(datetime.datetime.now())
     title = "pipe2gdoc_{}".format(now)
@@ -51,6 +65,7 @@ class GDocPipe:
       self.documentId = document.get('documentId')
     else:
       document = self.service.documents().get(documentId=self.documentId).execute()
+    txt = self.cleanupString(txt)
     startIndex = document['body']['content'][1]['startIndex']
     endIndex = document['body']['content'][len(document['body']['content'])-1]['endIndex']
     requests = []
@@ -121,18 +136,23 @@ if __name__ == '__main__':
   buf = []
   st = int(time.time())
   while True:
-    try:
-      line = input()
-      buf.append("{}\n".format(line))
-      if len(buf) > args.maxBuffer or int(time.time()) - st > args.maxTime:
+    ir, _, e = select([sys.stdin], [], [sys.stdin], args.maxTime)
+    if ir:
+      try:
+        line = input()
+        if len(line) > 0:
+          buf.append("{}\n".format(line))
+        else:
+          continue
+      except EOFError:
         if not args.q:
           print("Flushing buffer.")
+        buf.append("\n")
         doc.addText("".join(buf))
-        st = int(time.time())
-        buf = []
-    except EOFError:
+        break
+    if len(buf) > args.maxBuffer or (int(time.time()) - st >= args.maxTime and len(buf) > 0):
       if not args.q:
-        print("Flushing buffer.")
-      buf.append("\n")
+         print("Flushing buffer.")
       doc.addText("".join(buf))
-      break
+      st = int(time.time())
+      buf = []
